@@ -97,21 +97,31 @@ async def authenticate(
             detail="Invalid API Key",
     )
 
+lastmodel_name = ''
+lastmodel = None
+
 @app.post("/v1/embeddings", response_model=EmbeddingResponse, dependencies=[Depends(authenticate)])
 async def create_embeddings(request: EmbeddingRequest):
     return await create_embedding_impl(request)
 
 async def create_embedding_impl(request: EmbeddingRequest) -> EmbeddingResponse:
+    global lastmodel_name
+    global lastmodel
     try:
         settings = get_settings()
         if False == (request.model in model_mapping):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported model is requrested.",) 
         model_name = model_mapping[request.model]
-
-        model = SentenceTransformer(
-                model_name_or_path=model_name,
-                cache_folder=settings.cache_folder,
-                device=settings.device)
+        model = None
+        if lastmodel_name == model_name and lastmodel:
+            model = lastmodel
+        else:
+            model = SentenceTransformer(
+                    model_name_or_path=model_name,
+                    cache_folder=settings.cache_folder,
+                    device=settings.device)
+            lastmodel_name = model_name
+            lastmodel = model
         sentences = [request.input] if type(request.input) is str else request.input
         embeddings = model.encode(sentences)
 
